@@ -29,3 +29,5 @@ functions/.env.*
 *.sln
 *.sw?
 .firebase/
+.firebase/
+y
