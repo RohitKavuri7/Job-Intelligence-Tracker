@@ -198,35 +198,79 @@ const getDecisionLabelForStage = (app, fallbackForSaved) => {
   return fallbackForSaved
 }
 
+const CERTIFICATION_SIGNALS = [
+  'certification',
+  'certificate',
+  'certified',
+  'cert',
+  'license',
+  'licence',
+  'aws solutions architect',
+  'azure',
+  'gcp',
+  'snowpro',
+  'databricks',
+]
+
+const hasMissingRequiredCertification = (missingSkills = []) =>
+  (missingSkills || [])
+    .map((skill) => String(skill).toLowerCase())
+    .some((skill) =>
+      CERTIFICATION_SIGNALS.some((signal) => skill.includes(signal)),
+    )
+
+const clampFitScoreForCertification = (fitScore, missingRequiredCertification) => {
+  const normalized = Number.isFinite(Number(fitScore)) ? Number(fitScore) : 0
+  if (!missingRequiredCertification) {
+    return Math.min(100, Math.max(0, Math.round(normalized)))
+  }
+  return Math.min(75, Math.max(65, Math.round(normalized)))
+}
+
 const buildDecisionAndActions = ({ fitScore, missingSkills, role }) => {
   const normalizedMissing = (missingSkills || []).map((skill) => String(skill).toLowerCase())
   const criticalSkillSignals = ['java', 'spring', 'system design', 'aws', 'sql', 'react', 'node']
   const criticalMissing = normalizedMissing.filter((skill) =>
     criticalSkillSignals.some((critical) => skill.includes(critical)),
   )
+  const missingRequiredCertification = hasMissingRequiredCertification(missingSkills)
+  const adjustedFitScore = clampFitScoreForCertification(fitScore, missingRequiredCertification)
 
   let decision = 'Improve then apply'
   let reason = 'Moderate fit; improve evidence for missing skills before applying.'
 
-  if (fitScore >= 75 && criticalMissing.length <= 1) {
+  if (missingRequiredCertification) {
+    decision = 'Conditional / likely no-go unless recruiter confirms flexibility'
+    reason =
+      'A required certification appears missing. Proceed only if recruiter confirms flexibility on this requirement.'
+  } else if (adjustedFitScore >= 75 && criticalMissing.length <= 1) {
     decision = 'Apply now'
     reason = 'Strong fit with manageable gaps. Prioritize this application.'
-  } else if (fitScore < 45 || criticalMissing.length >= 4) {
+  } else if (adjustedFitScore < 45 || criticalMissing.length >= 4) {
     decision = 'Skip for now'
     reason = 'Significant gap on core requirements; better to prioritize stronger matches.'
   }
 
   const skillActions = criticalMissing.slice(0, 3).map((skill) =>
-    `Add one resume bullet proving hands-on work with ${skill}.`,
+    `Add evidence only from real work for ${skill}; do not claim hands-on experience you do not have.`,
   )
+  const certificationActions = missingRequiredCertification
+    ? [
+        'Pursuing certification: include current enrollment or exam timeline.',
+        'Equivalent ETL experience (if applicable): map real projects to JD outcomes.',
+        'Do not fabricate hands-on claims.',
+      ]
+    : []
   const roleAction = role
     ? `Align top 3 bullets to ${role} responsibilities using measurable outcomes.`
     : 'Align top 3 bullets to role responsibilities using measurable outcomes.'
 
   return {
+    fitScore: adjustedFitScore,
     decision,
     reason,
     actionPlan: [
+      ...certificationActions,
       ...skillActions,
       roleAction,
       'Mirror 5-8 key JD keywords naturally in resume/project bullets.',
@@ -325,6 +369,10 @@ function ApplicationsListSection({
     { key: 'all', label: 'All Decisions' },
     { key: 'Apply now', label: 'Apply now' },
     { key: 'Improve then apply', label: 'Improve' },
+    {
+      key: 'Conditional / likely no-go unless recruiter confirms flexibility',
+      label: 'Conditional / no-go',
+    },
     { key: 'Skip for now', label: 'Skip' },
     { key: 'Already applied', label: 'Already applied' },
     { key: 'In process', label: 'In process' },
@@ -423,11 +471,8 @@ function ApplicationDetailSection({
 }) {
   const { applicationId } = useParams()
   const app = apps.find((item) => item.id === applicationId)
-  const [activeTab, setActiveTab] = useState('overview')
-
-  useEffect(() => {
-    setActiveTab('overview')
-  }, [applicationId])
+  const [tabState, setTabState] = useState({ appId: '', tab: 'overview' })
+  const activeTab = tabState.appId === applicationId ? tabState.tab : 'overview'
 
   if (!app) {
     return (
@@ -464,21 +509,21 @@ function ApplicationDetailSection({
         <button
           type="button"
           className={`tab-btn ${activeTab === 'overview' ? 'tab-btn-active' : ''}`}
-          onClick={() => setActiveTab('overview')}
+          onClick={() => setTabState({ appId: applicationId, tab: 'overview' })}
         >
           Overview
         </button>
         <button
           type="button"
           className={`tab-btn ${activeTab === 'resumejd' ? 'tab-btn-active' : ''}`}
-          onClick={() => setActiveTab('resumejd')}
+          onClick={() => setTabState({ appId: applicationId, tab: 'resumejd' })}
         >
           Resume / JD
         </button>
         <button
           type="button"
           className={`tab-btn ${activeTab === 'analysis' ? 'tab-btn-active' : ''}`}
-          onClick={() => setActiveTab('analysis')}
+          onClick={() => setTabState({ appId: applicationId, tab: 'analysis' })}
         >
           Analysis
         </button>
