@@ -212,12 +212,14 @@ const CERTIFICATION_SIGNALS = [
   'databricks',
 ]
 
-const hasMissingRequiredCertification = (missingSkills = []) =>
-  (missingSkills || [])
-    .map((skill) => String(skill).toLowerCase())
-    .some((skill) =>
-      CERTIFICATION_SIGNALS.some((signal) => skill.includes(signal)),
-    )
+const hasMissingRequiredCertification = ({ missingSkills = [], fitExplanation = '' } = {}) => {
+  const combinedText = [
+    ...(missingSkills || []).map((skill) => String(skill).toLowerCase()),
+    String(fitExplanation || '').toLowerCase(),
+  ].join(' | ')
+
+  return CERTIFICATION_SIGNALS.some((signal) => combinedText.includes(signal))
+}
 
 const clampFitScoreForCertification = (fitScore, missingRequiredCertification) => {
   const normalized = Number.isFinite(Number(fitScore)) ? Number(fitScore) : 0
@@ -227,13 +229,16 @@ const clampFitScoreForCertification = (fitScore, missingRequiredCertification) =
   return Math.min(75, Math.max(65, Math.round(normalized)))
 }
 
-const buildDecisionAndActions = ({ fitScore, missingSkills, role }) => {
+const buildDecisionAndActions = ({ fitScore, missingSkills, role, fitExplanation = '' }) => {
   const normalizedMissing = (missingSkills || []).map((skill) => String(skill).toLowerCase())
   const criticalSkillSignals = ['java', 'spring', 'system design', 'aws', 'sql', 'react', 'node']
   const criticalMissing = normalizedMissing.filter((skill) =>
     criticalSkillSignals.some((critical) => skill.includes(critical)),
   )
-  const missingRequiredCertification = hasMissingRequiredCertification(missingSkills)
+  const missingRequiredCertification = hasMissingRequiredCertification({
+    missingSkills,
+    fitExplanation,
+  })
   const adjustedFitScore = clampFitScoreForCertification(fitScore, missingRequiredCertification)
 
   let decision = 'Improve then apply'
@@ -494,6 +499,7 @@ function ApplicationDetailSection({
         fitScore: Number(app.fitScore || 0),
         missingSkills: Array.isArray(app.missingSkills) ? app.missingSkills : [],
         role: app.role || '',
+        fitExplanation: String(app.fitExplanation || ''),
       })
     : null
   const displayedFitScore =
@@ -798,6 +804,7 @@ function App() {
           fitScore: Number(app.fitScore || 0),
           missingSkills: Array.isArray(app.missingSkills) ? app.missingSkills : [],
           role: app.role || '',
+          fitExplanation: String(app.fitExplanation || ''),
         })
         return {
           ...app,
@@ -1059,6 +1066,7 @@ function App() {
             ? analysis.insights.missingSkills
             : [],
           role: form.role.trim(),
+          fitExplanation: String(analysis.insights.explanation || ''),
         }),
         analysisMode: analysis.usedFallback ? 'local' : 'cloud',
         analyzedAt: serverTimestamp(),
@@ -1184,6 +1192,7 @@ function App() {
             ? analysis.insights.missingSkills
             : [],
           role: app.role,
+          fitExplanation: String(analysis.insights.explanation || ''),
         }),
         analysisMode: analysis.usedFallback ? 'local' : 'cloud',
         analysisInputSignature: currentSignature,
