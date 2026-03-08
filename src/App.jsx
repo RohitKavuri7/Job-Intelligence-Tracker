@@ -489,6 +489,23 @@ function ApplicationDetailSection({
     app,
     app.decision || 'Needs analysis',
   )
+  const computedInsights = typeof app.fitScore === 'number'
+    ? buildDecisionAndActions({
+        fitScore: Number(app.fitScore || 0),
+        missingSkills: Array.isArray(app.missingSkills) ? app.missingSkills : [],
+        role: app.role || '',
+      })
+    : null
+  const displayedFitScore =
+    computedInsights && typeof computedInsights.fitScore === 'number'
+      ? computedInsights.fitScore
+      : app.fitScore
+  const displayedDecisionLabel = computedInsights
+    ? getDecisionLabelForStage(app, computedInsights.decision)
+    : detailDecisionLabel
+  const displayedReason = computedInsights?.reason || app.reason
+  const displayedActionPlan =
+    computedInsights?.actionPlan?.length ? computedInsights.actionPlan : app.actionPlan
 
   return (
     <section className="card detail-page">
@@ -607,20 +624,20 @@ function ApplicationDetailSection({
 
           {typeof app.fitScore === 'number' ? (
             <div className="insights">
-              <p><strong>Fit Score:</strong> {app.fitScore}%</p>
-              {detailDecisionLabel ? (
-                <p><strong>Apply Decision:</strong> {detailDecisionLabel}</p>
+              <p><strong>Fit Score:</strong> {displayedFitScore}%</p>
+              {displayedDecisionLabel ? (
+                <p><strong>Apply Decision:</strong> {displayedDecisionLabel}</p>
               ) : null}
-              {app.reason ? <p>{app.reason}</p> : null}
+              {displayedReason ? <p>{displayedReason}</p> : null}
               {app.fitExplanation ? <p>{app.fitExplanation}</p> : null}
               {app.missingSkills?.length ? (
                 <p><strong>Missing Skills:</strong> {app.missingSkills.join(', ')}</p>
               ) : null}
-              {app.actionPlan?.length ? (
+              {displayedActionPlan?.length ? (
                 <div>
                   <strong>Action Plan:</strong>
                   <ul>
-                    {app.actionPlan.map((action, index) => (
+                    {displayedActionPlan.map((action, index) => (
                       <li key={`${app.id}-action-${index}`}>{action}</li>
                     ))}
                   </ul>
@@ -776,12 +793,6 @@ function App() {
 
   const appsWithDecision = useMemo(() => {
     return apps.map((app) => {
-      if (app.decision) {
-        return {
-          ...app,
-          decisionLabel: getDecisionLabelForStage(app, app.decision),
-        }
-      }
       if (typeof app.fitScore === 'number') {
         const inferred = buildDecisionAndActions({
           fitScore: Number(app.fitScore || 0),
@@ -790,7 +801,17 @@ function App() {
         })
         return {
           ...app,
+          fitScore:
+            typeof inferred.fitScore === 'number'
+              ? inferred.fitScore
+              : Number(app.fitScore || 0),
           decisionLabel: getDecisionLabelForStage(app, inferred.decision),
+        }
+      }
+      if (app.decision) {
+        return {
+          ...app,
+          decisionLabel: getDecisionLabelForStage(app, app.decision),
         }
       }
       return {
